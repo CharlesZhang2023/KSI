@@ -19,6 +19,10 @@ export function deriveEgressAllowlist(
   if (provider === 'openai') {
     hosts.add('api.openai.com');
     addUrlHost(hosts, env.OPENAI_BASE_URL);
+    try {
+      const host = new URL(env.OPENAI_BASE_URL || '').hostname.toLowerCase();
+      if (host === 'localhost' || host === '127.0.0.1') hosts.add('host.docker.internal');
+    } catch { /* malformed base URL is handled by the provider */ }
   } else {
     // Default + explicit anthropic; any unrecognised provider also falls here.
     hosts.add('api.anthropic.com');

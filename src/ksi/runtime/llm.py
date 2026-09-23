@@ -217,7 +217,12 @@ class AnthropicLLMCaller:
 
 
 class OpenAILLMCaller:
-    """Thin OpenAI Responses API wrapper for direct LLM calls."""
+    """OpenAI direct caller, with an opt-in Chat Completions compatibility mode.
+
+    KSI normally uses the Responses API.  Some OpenAI-compatible providers
+    implement only Chat Completions; ``KSI_OPENAI_API_MODE=chat_completions``
+    keeps the orchestration-side phases usable with those endpoints.
+    """
 
     def __init__(
         self,
@@ -236,6 +241,7 @@ class OpenAILLMCaller:
         self._reasoning_effort = reasoning_effort or os.environ.get("REASONING_EFFORT", "").strip() or None
         self._temperature = temperature
         self._seed = seed
+        self._api_mode = (os.environ.get("KSI_OPENAI_API_MODE") or "responses").strip().lower()
         api_key = (api_key or os.environ.get("OPENAI_API_KEY") or "").strip()
         kwargs = _build_client_kwargs({}, timeout_env="KSI_OPENAI_TIMEOUT_SEC", timeout_default=120)
         self._client = OpenAI(api_key=api_key, **kwargs) if api_key else OpenAI(**kwargs)
@@ -273,6 +279,16 @@ class OpenAILLMCaller:
         # each turn cache-read the accumulated history. The routing key stays
         # system-only (the blocks grow every turn — folding them in would send
         # each turn to a fresh shard and miss).
+        if self._api_mode == "chat_completions":
+            return self._call_chat_completions(
+                system=system,
+                user=user,
+                json_schema=json_schema,
+                cache_prefix=cache_prefix,
+                cache_blocks=cache_blocks,
+                **kwargs,
+            )
+
         blocks = [b for b in (cache_blocks or []) if b]
         if blocks:
             user_content: list[dict[str, Any]] = [{"type": "input_text", "text": b} for b in blocks]
@@ -373,6 +389,61 @@ class OpenAILLMCaller:
             return LLMResponse(text=text, usage=usage, parsed=parsed)
 
         return LLMResponse(text=text, usage=usage)
+
+    def _call_chat_completions(
+        self,
+        *,
+        system: str,
+        user: str,
+        json_schema: dict[str, Any] | None,
+        cache_prefix: str | None,
+        cache_blocks: list[str] | None,
+        **kwargs: Any,
+    ) -> LLMResponse:
+        """Compatibility transport for OpenAI-style ``/chat/completions`` APIs.
+
+        Prompt caching and Responses-only JSON-schema enforcement are not
+        available on every compatible endpoint.  We retain the same caller
+        contract by asking for JSON in the system instruction and parsing the
+        returned text defensively.
+        """
+        model = kwargs.get("model") or self._model
+        max_tokens = kwargs.get("max_tokens") or self._max_tokens
+        stable_parts = [b for b in (cache_blocks or []) if b]
+        if cache_prefix:
+            stable_parts.append(cache_prefix)
+        user_text = "\n\n".join([*stable_parts, user])
+        system_text = system
+        if json_schema is not None:
+            system_text += "\n\nReturn valid JSON only. Match this JSON schema:\n" + json.dumps(json_schema.get("schema", {}))
+        request: dict[str, Any] = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_text},
+                {"role": "user", "content": user_text},
+            ],
+            "max_tokens": max_tokens,
+        }
+        temperature = kwargs.get("temperature", self._temperature)
+        if temperature is not None:
+            request["temperature"] = float(temperature)
+        response = self._client.chat.completions.create(**request)
+        choices = getattr(response, "choices", None) or []
+        message = getattr(choices[0], "message", None) if choices else None
+        text = str(getattr(message, "content", "") or "")
+        usage_obj = getattr(response, "usage", None)
+        usage = TokenUsage(
+            input_tokens=_usage_value(usage_obj, "prompt_tokens"),
+            output_tokens=_usage_value(usage_obj, "completion_tokens"),
+        )
+        parsed = None
+        if json_schema is not None:
+            try:
+                loaded = json.loads(text)
+                parsed = loaded if isinstance(loaded, dict) else None
+            except (TypeError, ValueError):
+                parsed = None
+        return LLMResponse(text=text, usage=usage, parsed=parsed)
 
 
 def build_llm_caller(

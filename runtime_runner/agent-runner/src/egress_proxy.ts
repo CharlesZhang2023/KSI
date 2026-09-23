@@ -1,8 +1,15 @@
 import http from 'node:http';
 import net from 'node:net';
 
-/** Only the provider API ports are ever needed. */
+/** Only provider API ports are normally needed. */
 const ALLOWED_PORTS = new Set([443, 80]);
+
+// A locally hosted Responses-to-Chat adapter is the one deliberate exception:
+// it is reachable only through Docker Desktop's reserved hostname and lets a
+// Chat-Completions-only provider work with the KSI OpenAI Responses runner.
+// Keep this a fixed host+port pair rather than opening an arbitrary high port.
+const LOCAL_COMPAT_PROXY_HOST = 'host.docker.internal';
+const LOCAL_COMPAT_PROXY_PORT = 4002;
 
 /** Exact-hostname, case-insensitive match. No wildcard/suffix matching by
  *  design — suffix matching would allow `api.anthropic.com.evil.com`. */
@@ -12,6 +19,9 @@ export function isAllowed(
   allowlist: ReadonlySet<string>,
   allowedPorts: ReadonlySet<number> = ALLOWED_PORTS,
 ): boolean {
+  if (host.toLowerCase() === LOCAL_COMPAT_PROXY_HOST && port === LOCAL_COMPAT_PROXY_PORT) {
+    return allowlist.has(LOCAL_COMPAT_PROXY_HOST);
+  }
   if (!allowedPorts.has(port)) return false;
   return allowlist.has(host.toLowerCase());
 }

@@ -108,6 +108,13 @@ def load_provider_profile(profile_path: str) -> dict[str, str]:
         if not key:
             raise ProviderConfigError("openai/api mode requires OPENAI_API_KEY.")
         out["OPENAI_API_KEY"] = key
+        # OpenAI-compatible providers commonly expose the same Responses API
+        # under a custom endpoint.  Keep that endpoint in the normalized
+        # runtime environment so direct forum calls and disposable container
+        # agents use the exact same provider.
+        base_url = cfg.get("OPENAI_BASE_URL", "").strip() or os.environ.get("OPENAI_BASE_URL", "").strip()
+        if base_url:
+            out["OPENAI_BASE_URL"] = base_url
         effort = cfg.get("REASONING_EFFORT", "").strip() or os.environ.get("REASONING_EFFORT", "").strip()
         if effort and effort.lower() not in _OPENAI_REASONING_EFFORTS:
             raise ProviderConfigError(
@@ -127,6 +134,8 @@ def load_provider_profile(profile_path: str) -> dict[str, str]:
         "TOKENIZERS_PARALLELISM",
         "KSI_OPENAI_MAX_TURNS",
         "OPENAI_AGENTS_DISABLE_TRACING",
+        "OPENAI_BASE_URL",
+        "KSI_OPENAI_API_MODE",
     ):
         value = cfg.get(key, "").strip() or os.environ.get(key, "").strip()
         if value:

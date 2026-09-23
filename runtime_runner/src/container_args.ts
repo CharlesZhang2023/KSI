@@ -797,6 +797,21 @@ export function buildContainerArgs(
 
   const args: string[] = ['run', '-i', '--rm', '--network', network, '--name', containerName, ...resourceHardeningArgs(), ...isolationArgs, ...proxyEnv];
 
+  // `127.0.0.1` refers to the container, not the macOS host. Keep local
+  // compatibility proxies reachable to host-side callers at loopback, but
+  // rewrite that one endpoint for the isolated container network.
+  const containerValue = (key: string, value: string): string => {
+    if (key !== 'OPENAI_BASE_URL') return value;
+    try {
+      const url = new URL(value);
+      if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') {
+        url.hostname = 'host.docker.internal';
+        return url.toString().replace(/\/$/, '');
+      }
+    } catch { /* preserve malformed values for the provider's own validation */ }
+    return value;
+  };
+
   // Pass host timezone so container's local time matches the user's
   args.push('-e', `TZ=${TIMEZONE}`);
   // Forward explicit provider/model/auth selection plus knowledge/runtime DB
@@ -820,6 +835,9 @@ export function buildContainerArgs(
     'KSI_OPENAI_MAX_TURNS',
     'KSI_CLAUDE_MAX_TURNS',
     'OPENAI_AGENTS_DISABLE_TRACING',
+    // Needed when KSI is configured against an OpenAI-compatible endpoint.
+    // It is also consumed by the isolated-egress allowlist.
+    'OPENAI_BASE_URL',
     'KSI_RUNNER_ROOT',
     // Forwarded but no longer consumed by the agent-runner (the direct-ARC
     // adapter that read it was removed); kept to avoid coupling with the
@@ -850,7 +868,7 @@ export function buildContainerArgs(
   ]) {
     const value = process.env[key];
     if (value && value.trim()) {
-      args.push('-e', `${key}=${value}`);
+      args.push('-e', `${key}=${containerValue(key, value)}`);
     }
   }
   const embeddingModel = process.env.KSI_EMBEDDING_MODEL || 'google/embeddinggemma-300m';

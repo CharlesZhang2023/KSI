@@ -34,7 +34,14 @@ if ((${#EXTRA_BUILD_ARGS[@]} > 0)); then
     echo "Extra docker args: ${EXTRA_BUILD_ARGS[*]}"
 fi
 
-"${CONTAINER_RUNTIME}" build "${EXTRA_BUILD_ARGS[@]}" -f "$DOCKERFILE" -t "${PRIMARY_IMAGE_NAME}:${TAG}" "$REPO_ROOT"
+# Bash 3.2 (the version bundled with macOS) treats an empty array expansion as
+# an unset parameter under `set -u`. Keep that path separate so individual
+# extra arguments retain their shell boundaries when they are present.
+if ((${#EXTRA_BUILD_ARGS[@]} > 0)); then
+    "${CONTAINER_RUNTIME}" build "${EXTRA_BUILD_ARGS[@]}" -f "$DOCKERFILE" -t "${PRIMARY_IMAGE_NAME}:${TAG}" "$REPO_ROOT"
+else
+    "${CONTAINER_RUNTIME}" build -f "$DOCKERFILE" -t "${PRIMARY_IMAGE_NAME}:${TAG}" "$REPO_ROOT"
+fi
 
 echo ""
 echo "Build complete!"

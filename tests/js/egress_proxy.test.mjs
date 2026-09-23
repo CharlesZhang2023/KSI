@@ -55,6 +55,18 @@ describe('egress_proxy allowlist', () => {
     assert.equal(out, 'false');
   });
 
+  it('permits only the fixed local Responses-to-Chat adapter port', () => {
+    const out = runTsx(`
+      const al = parseAllowlist('host.docker.internal');
+      console.log(JSON.stringify([
+        isAllowed('host.docker.internal', 4002, al),
+        isAllowed('host.docker.internal', 4003, al),
+        isAllowed('host.docker.internal.evil.test', 4002, al),
+      ]));
+    `);
+    assert.deepEqual(JSON.parse(out), [true, false, false]);
+  });
+
   it('does not suffix-match (no api.anthropic.com.evil.com bypass)', () => {
     const out = runTsx(`
       const al = parseAllowlist('api.anthropic.com');
