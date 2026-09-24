@@ -14,6 +14,7 @@ import {
 } from '@openai/agents';
 
 import { extractStructuredForumText } from './extract.js';
+import { inlineForumTaskMd } from './forum_prompt.js';
 import { isOpenAIForumPhase, selectOpenAINativeTools } from './openai_tool_selection.js';
 import { usageFromResult } from './openai_usage.js';
 import { runOpenAIPolyglotTestFeedback } from './polyglot_test_feedback_openai.js';
@@ -1315,7 +1316,10 @@ export async function runOpenAIQuery(
 
     let result: any;
     try {
-      result = await run(agent, prompt, runOptions);
+      const initialPrompt = isForumTask
+        ? inlineForumTaskMd(prompt, path.join(cwd, 'workspace', 'TASK.md'))
+        : prompt;
+      result = await run(agent, initialPrompt, runOptions);
     } catch (err) {
       if (isMaxTurnsErr(err)) {
         return handleMaxTurns(err);
