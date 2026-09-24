@@ -418,6 +418,16 @@ def _build_runner_env(base_env: dict[str, str], timeout_sec: int) -> dict[str, s
         host_val = os.environ.get(parity_key)
         if host_val and host_val.strip():
             env.setdefault(parity_key, host_val.strip())
+    # Provider endpoint overrides for OpenAI-/Anthropic-compatible gateways.
+    # Host-only env does not otherwise reach the runner (``base_env`` starts
+    # from provider-profile keys), so without this the host-side SDK calls
+    # honor the gateway while container agents fall back to the official
+    # endpoints. ``container_args.ts`` forwards both keys into the container
+    # and the egress allowlist admits their hosts.
+    for endpoint_key in ("OPENAI_BASE_URL", "ANTHROPIC_BASE_URL"):
+        host_val = os.environ.get(endpoint_key)
+        if host_val and host_val.strip():
+            env.setdefault(endpoint_key, host_val.strip())
     # Shared per-turn output-token cap for the direct-ARC paths.
     # Thread the knob from the host env (or provider profile, already merged into
     # ``base_env``) so ``container_runner.ts`` forwards it into the container,

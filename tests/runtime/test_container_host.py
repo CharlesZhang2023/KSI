@@ -1182,6 +1182,20 @@ class TestBuildRunnerEnv:
         env = _build_runner_env({"KSI_RUN_ID": "profile-campaign"}, timeout_sec=120)
         assert env["KSI_RUN_ID"] == "profile-campaign"
 
+    def test_threads_host_provider_endpoints(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_BASE_URL", "https://gw.example.com/v1")
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://gw.example.com")
+        env = _build_runner_env({}, timeout_sec=120)
+        assert env["OPENAI_BASE_URL"] == "https://gw.example.com/v1"
+        assert env["ANTHROPIC_BASE_URL"] == "https://gw.example.com"
+
+    def test_omits_provider_endpoints_when_unset(self, monkeypatch):
+        monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+        monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+        env = _build_runner_env({}, timeout_sec=120)
+        assert "OPENAI_BASE_URL" not in env
+        assert "ANTHROPIC_BASE_URL" not in env
+
     def test_sets_default_log_level_and_idle_timeout(self):
         env = _build_runner_env({}, timeout_sec=120)
         assert env["LOG_LEVEL"] == "silent"
