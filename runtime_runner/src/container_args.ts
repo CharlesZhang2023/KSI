@@ -191,8 +191,13 @@ function dockerSync(args: string[], timeoutMs = 15_000) {
   return spawnSync(CONTAINER_RUNTIME_BIN, args, { stdio: 'pipe', timeout: timeoutMs });
 }
 
+// Block without spawning a child process. The previous `spawnSync('sleep')`
+// busy-wait forked ~10 processes/s per waiter; on macOS hosts that slowed the
+// lock holder's docker CLI calls ~50x (egress setup 1.5s -> 55-85s), so every
+// waiter hit EGRESS_LOCK_WAIT_MS and concurrent task launches failed.
+const SLEEP_CELL = new Int32Array(new SharedArrayBuffer(4));
 function sleepSync(ms: number): void {
-  spawnSync('sleep', [String(ms / 1000)]);
+  Atomics.wait(SLEEP_CELL, 0, 0, Math.max(0, ms));
 }
 
 function egressLeaseRoot(): string {
