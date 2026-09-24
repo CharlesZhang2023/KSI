@@ -25,6 +25,11 @@ describe('container_runner env forwarding', () => {
     assert.match(containerArgs, /'OPENAI_AGENTS_DISABLE_TRACING'/);
   });
 
+  it('forwards provider endpoint overrides into the container', () => {
+    assert.match(containerArgs, /'OPENAI_BASE_URL'/);
+    assert.match(containerArgs, /'ANTHROPIC_BASE_URL'/);
+  });
+
   it('forwards the unsafe Claude native-tool override explicitly', () => {
     assert.match(containerArgs, /'KSI_ALLOW_UNSAFE_CLAUDE_NATIVE_TOOLS_WITH_SECRETS'/);
   });

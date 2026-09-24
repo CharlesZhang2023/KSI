@@ -17,6 +17,13 @@
  */
 
 export const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
+
+/** Messages endpoint, honoring ANTHROPIC_BASE_URL (same convention as the
+ *  Anthropic SDKs) so the direct adapter follows the configured gateway. */
+export function anthropicMessagesUrl(sdkEnv: Record<string, string | undefined>): string {
+  const base = String(sdkEnv.ANTHROPIC_BASE_URL || '').trim().replace(/\/+$/, '');
+  return base ? `${base}/v1/messages` : ANTHROPIC_MESSAGES_URL;
+}
 export const ANTHROPIC_VERSION = '2023-06-01';
 
 // Transient failures the API recommends retrying: rate limits (429) and the
@@ -104,7 +111,7 @@ export async function createMessage(
     let response: Response;
     let text: string;
     try {
-      response = await fetch(ANTHROPIC_MESSAGES_URL, {
+      response = await fetch(anthropicMessagesUrl(sdkEnv), {
         method: 'POST',
         headers: {
           'content-type': 'application/json',

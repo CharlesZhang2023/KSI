@@ -847,6 +847,11 @@ export function buildContainerArgs(
     // function tools and prepends a richer agentic-coding system prompt on
     // non-ARC tasks.
     'OPENAI_PARITY_TOOLS',
+    // Provider endpoint overrides for OpenAI-/Anthropic-compatible gateways.
+    // Unset in the default configuration, so the SDKs keep their official
+    // endpoints; the egress allowlist already admits these hosts.
+    'OPENAI_BASE_URL',
+    'ANTHROPIC_BASE_URL',
   ]) {
     const value = process.env[key];
     if (value && value.trim()) {

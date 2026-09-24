@@ -185,3 +185,19 @@ describe('anthropic_direct_transport createMessage — retry/backoff', () => {
     `);
   });
 });
+
+describe('anthropicMessagesUrl', { skip: tsxSkip }, () => {
+  it('uses the official endpoint by default and honors ANTHROPIC_BASE_URL', () => {
+    const out = runTsxFixture(`
+      import { anthropicMessagesUrl } from './agent-runner/src/anthropic_direct_transport.ts';
+      console.log(JSON.stringify([
+        anthropicMessagesUrl({}),
+        anthropicMessagesUrl({ ANTHROPIC_BASE_URL: 'https://gw.example.com/' }),
+      ]));
+    `);
+    assert.deepEqual(JSON.parse(out), [
+      'https://api.anthropic.com/v1/messages',
+      'https://gw.example.com/v1/messages',
+    ]);
+  });
+});
