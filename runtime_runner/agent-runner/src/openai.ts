@@ -6,6 +6,7 @@ import {
   Agent,
   MCPServerStdio,
   MaxTurnsExceededError,
+  OpenAIProvider,
   applyDiff,
   extractAllTextOutput,
   run,
@@ -15,6 +16,7 @@ import {
 
 import { extractStructuredForumText } from './extract.js';
 import { inlineForumTaskMd } from './forum_prompt.js';
+import { GatewayFailoverModel } from './gateway_failover_model.js';
 import { isOpenAIForumPhase, selectOpenAINativeTools } from './openai_tool_selection.js';
 import { usageFromResult } from './openai_usage.js';
 import { runOpenAIPolyglotTestFeedback } from './polyglot_test_feedback_openai.js';
@@ -1260,10 +1262,17 @@ export async function runOpenAIQuery(
     applyPatchFnTool,
     parityFsTools,
   });
+  // Same model the SDK would resolve from the name, wrapped so a turn that a
+  // gateway fails over to another upstream account is re-sent once without
+  // the replayed encrypted reasoning (see gateway_failover_model.ts).
+  const failoverModel = new GatewayFailoverModel(
+    await new OpenAIProvider().getModel(selectedModel),
+    log,
+  );
   const makeAgent = (instructions: string): Agent =>
     new Agent({
       name: 'KsiOpenAIContainerAgent',
-      model: selectedModel,
+      model: failoverModel,
       ...(modelSettings ? { modelSettings } : {}),
       instructions,
       tools,
