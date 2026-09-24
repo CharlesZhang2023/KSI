@@ -33,7 +33,10 @@
       "overloaded",
       "fetch failed",
       "headers timeout",
-      "headerstimeouterror"
+      "headerstimeouterror",
+      "encrypted content for item",
+      "encrypted conversation context could not be validated",
+      "conversation context is not compatible with the available resources"
     ],
     "transient_extra": [
       "timed out",

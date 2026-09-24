@@ -80,6 +80,11 @@ _HISTORICAL_MARKERS = {
         "fetch failed",
         "headers timeout",
         "headerstimeouterror",
+        # Added after the refactor (intentional behavior change): gateway
+        # failover breaks Responses-API encrypted reasoning state.
+        "encrypted content for item",
+        "encrypted conversation context could not be validated",
+        "conversation context is not compatible with the available resources",
     ),
     "transient_extra": (
         "timed out",

@@ -72,6 +72,11 @@ _VENDORED_RETRYABLE_MARKERS: dict[str, object] = {
             "fetch failed",
             "headers timeout",
             "headerstimeouterror",
+            # Gateway failover: a turn routed to a different upstream account
+            # cannot decrypt the previous turn's Responses-API reasoning state.
+            "encrypted content for item",
+            "encrypted conversation context could not be validated",
+            "conversation context is not compatible with the available resources",
         ),
         "transient_extra": (
             "timed out",
