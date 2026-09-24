@@ -889,7 +889,9 @@ function buildModelSettings(
   sdkEnv: Record<string, string | undefined>,
 ): Record<string, unknown> | undefined {
   const effort = String(sdkEnv.REASONING_EFFORT || '').trim();
-  if (!effort || !model.toLowerCase().includes('gpt-5')) {
+  const lower = model.toLowerCase();
+  // Reasoning-effort models: gpt-5 family and its gpt-6 successors.
+  if (!effort || !(lower.includes('gpt-5') || lower.includes('gpt-6'))) {
     return undefined;
   }
   return { reasoning: { effort } };

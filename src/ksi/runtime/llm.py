@@ -85,7 +85,7 @@ def _is_openai_reasoning_model(model: str) -> bool:
     """Reasoning-family models (gpt-5*, o-series) reject temperature/seed in the
     Responses API."""
     m = str(model or "").lower()
-    return m.startswith("gpt-5") or m.startswith("o1") or m.startswith("o3") or m.startswith("o4")
+    return m.startswith(("gpt-5", "gpt-6", "o1", "o3", "o4"))
 
 
 class AnthropicLLMCaller:
@@ -314,7 +314,7 @@ class OpenAILLMCaller:
                 (system + "\x00" + cache_prefix if cache_prefix else system).encode("utf-8")
             ).hexdigest()[:32],
         }
-        if self._reasoning_effort and "gpt-5" in model_override:
+        if self._reasoning_effort and ("gpt-5" in model_override or "gpt-6" in model_override):
             request["reasoning"] = {"effort": self._reasoning_effort}
         # Reasoning-family models (gpt-5*, o-series) reject `temperature`;
         # only set it for chat-completion-style models. `seed` is never sent:
