@@ -434,6 +434,7 @@ def _build_runner_env(base_env: dict[str, str], timeout_sec: int) -> dict[str, s
         "ANTHROPIC_SMALL_FAST_MODEL",
         "CLAUDE_CODE_SUBAGENT_MODEL",
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "KSI_ANTHROPIC_DISABLE_THINKING",
     ):
         host_val = os.environ.get(endpoint_key)
         if host_val and host_val.strip():

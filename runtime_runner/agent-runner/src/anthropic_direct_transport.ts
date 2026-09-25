@@ -18,6 +18,17 @@
 
 export const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 
+/** Opt-in (KSI_ANTHROPIC_DISABLE_THINKING): send `thinking: disabled`, matching
+ *  Haiku's non-thinking direct calls for models that think by default. */
+export function withThinkingPolicy(
+  sdkEnv: Record<string, string | undefined>,
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  const flag = String(sdkEnv.KSI_ANTHROPIC_DISABLE_THINKING || '').trim().toLowerCase();
+  if (!['1', 'true', 'yes'].includes(flag) || 'thinking' in body) return body;
+  return { ...body, thinking: { type: 'disabled' } };
+}
+
 /** Messages endpoint, honoring ANTHROPIC_BASE_URL (same convention as the
  *  Anthropic SDKs) so the direct adapter follows the configured gateway. */
 export function anthropicMessagesUrl(sdkEnv: Record<string, string | undefined>): string {
@@ -118,7 +129,7 @@ export async function createMessage(
           'x-api-key': apiKey,
           'anthropic-version': ANTHROPIC_VERSION,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(withThinkingPolicy(sdkEnv, body)),
       });
       text = await response.text();
     } catch (err) {

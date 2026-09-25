@@ -866,6 +866,7 @@ export function buildContainerArgs(
     'ANTHROPIC_SMALL_FAST_MODEL',
     'CLAUDE_CODE_SUBAGENT_MODEL',
     'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
+    'KSI_ANTHROPIC_DISABLE_THINKING',
   ]) {
     const value = process.env[key];
     if (value && value.trim()) {

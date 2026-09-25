@@ -81,6 +81,11 @@ def _anthropic_tool_input(response: Any, tool_name: str | None) -> dict[str, Any
     return None
 
 
+def _anthropic_thinking_disabled() -> bool:
+    """``KSI_ANTHROPIC_DISABLE_THINKING`` truthy: send ``thinking: disabled``."""
+    return str(os.environ.get("KSI_ANTHROPIC_DISABLE_THINKING", "")).strip().lower() in {"1", "true", "yes"}
+
+
 def _is_openai_reasoning_model(model: str) -> bool:
     """Reasoning-family models (gpt-5*, o-series) reject temperature/seed in the
     Responses API."""
@@ -182,6 +187,11 @@ class AnthropicLLMCaller:
         }
         if temperature_override is not None:
             request_kwargs["temperature"] = float(temperature_override)
+        # Anthropic-compatible models that think by default (e.g. DeepSeek)
+        # reject a forced tool_choice in thinking mode and lead with a thinking
+        # block. Opt-in parity with Haiku, whose direct calls do not think.
+        if _anthropic_thinking_disabled():
+            request_kwargs["thinking"] = {"type": "disabled"}
 
         tool_name: str | None = None
         if json_schema is not None:
@@ -212,7 +222,13 @@ class AnthropicLLMCaller:
             text = json.dumps(parsed) if parsed is not None else ""
             return LLMResponse(text=text, usage=usage, parsed=parsed)
 
-        text = response.content[0].text if response.content else ""
+        # Skip non-text blocks (e.g. a leading thinking block).
+        text = "".join(
+            b.text
+            for b in (response.content or [])
+            if getattr(b, "type", None) not in ("thinking", "redacted_thinking")
+            and isinstance(getattr(b, "text", None), str)
+        )
         return LLMResponse(text=text, usage=usage)
 
 
