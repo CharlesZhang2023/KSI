@@ -857,6 +857,15 @@ export function buildContainerArgs(
     // endpoints; the egress allowlist already admits these hosts.
     'OPENAI_BASE_URL',
     'ANTHROPIC_BASE_URL',
+    // Claude Code model-alias overrides. With a non-Anthropic model behind an
+    // Anthropic-compatible endpoint, Claude Code otherwise sends its background
+    // calls (titles, topic checks, subagents) to claude-haiku/sonnet ids.
+    'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+    'ANTHROPIC_DEFAULT_SONNET_MODEL',
+    'ANTHROPIC_DEFAULT_OPUS_MODEL',
+    'ANTHROPIC_SMALL_FAST_MODEL',
+    'CLAUDE_CODE_SUBAGENT_MODEL',
+    'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
   ]) {
     const value = process.env[key];
     if (value && value.trim()) {

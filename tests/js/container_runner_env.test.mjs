@@ -28,6 +28,8 @@ describe('container_runner env forwarding', () => {
   it('forwards provider endpoint overrides into the container', () => {
     assert.match(containerArgs, /'OPENAI_BASE_URL'/);
     assert.match(containerArgs, /'ANTHROPIC_BASE_URL'/);
+    assert.match(containerArgs, /'ANTHROPIC_SMALL_FAST_MODEL'/);
+    assert.match(containerArgs, /'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'/);
   });
 
   it('forwards the unsafe Claude native-tool override explicitly', () => {

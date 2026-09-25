@@ -424,7 +424,17 @@ def _build_runner_env(base_env: dict[str, str], timeout_sec: int) -> dict[str, s
     # honor the gateway while container agents fall back to the official
     # endpoints. ``container_args.ts`` forwards both keys into the container
     # and the egress allowlist admits their hosts.
-    for endpoint_key in ("OPENAI_BASE_URL", "ANTHROPIC_BASE_URL"):
+    for endpoint_key in (
+        "OPENAI_BASE_URL",
+        "ANTHROPIC_BASE_URL",
+        # Claude Code model-alias overrides (see container_args.ts).
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_SMALL_FAST_MODEL",
+        "CLAUDE_CODE_SUBAGENT_MODEL",
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+    ):
         host_val = os.environ.get(endpoint_key)
         if host_val and host_val.strip():
             env.setdefault(endpoint_key, host_val.strip())

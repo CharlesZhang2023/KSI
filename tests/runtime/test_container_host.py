@@ -1189,6 +1189,13 @@ class TestBuildRunnerEnv:
         assert env["OPENAI_BASE_URL"] == "https://gw.example.com/v1"
         assert env["ANTHROPIC_BASE_URL"] == "https://gw.example.com"
 
+    def test_threads_claude_code_model_overrides(self, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_SMALL_FAST_MODEL", "deepseek-flash")
+        monkeypatch.setenv("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1")
+        env = _build_runner_env({}, timeout_sec=120)
+        assert env["ANTHROPIC_SMALL_FAST_MODEL"] == "deepseek-flash"
+        assert env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] == "1"
+
     def test_omits_provider_endpoints_when_unset(self, monkeypatch):
         monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
         monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
