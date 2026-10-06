@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ..harness_surfaces import surface
 from ..memory.parity import redact_solver_hidden_text
 from ..tasks.registry import resolve_source
 from .types import truncate_at_boundary
@@ -649,6 +650,7 @@ def _fmt_target_task_section(target_task: dict[str, Any] | None) -> str:
     return f"{_TARGET_TASK_SECTION_TITLE}\nTask ID: {tid}\n{prompt}"
 
 
+@surface("distill.per_task.prompt")
 def build_per_task_distill_prompt(
     *,
     task_id: str,
@@ -710,6 +712,7 @@ def build_cross_task_distill_prompt(
     return system, cache_prefix + suffix
 
 
+@surface("distill.cross_task.prompt")
 def build_cross_task_distill_prompt_parts(
     *,
     cross_posts: list[dict[str, Any]],

@@ -8,6 +8,7 @@ import re
 from typing import Any
 
 from ..errors import AuthenticationFailure, is_auth_error
+from ..harness_surfaces import surface
 from .prompts import DISTILL_BUNDLE_JSON_SCHEMA, build_per_task_distill_prompt
 from .types import CROSS_TASK_INSIGHT_FIELDS, DistillLLMResult, LLMCallable, PerTaskBundle, truncate_at_boundary
 from .types import coerce_positive_int as _coerce_positive_int
@@ -470,6 +471,7 @@ def _item_tokens(item: Any) -> set[str]:
     return {w for w in re.findall(r"[a-z0-9_]+", text.lower()) if len(w) > 2}
 
 
+@surface("distill.bundle_filter")
 def dedupe_bundle_items(bundle: dict[str, Any]) -> dict[str, Any]:
     """Drop items near-duplicating an earlier-kept item ANYWHERE in the bundle
     (token-Jaccard >= 0.8). Bundles self-duplicate

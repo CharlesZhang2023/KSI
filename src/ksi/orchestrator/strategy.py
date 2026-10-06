@@ -266,6 +266,71 @@ class RawAttemptsStrategy(DefaultKnowledgeStrategy):
         return False
 
 
+class KnowledgeHarnessHookStrategy(DefaultKnowledgeStrategy):
+    """KHSI: let an external process revise the knowledge harness between generations.
+
+    Identical to :class:`DefaultKnowledgeStrategy` except that, after a
+    generation's attempts and before its forums, it runs the command in
+    ``KSI_KHSI_HOOK_CMD``. That command may rewrite the harness file named by
+    ``KSI_KNOWLEDGE_HARNESS`` (see :mod:`ksi.harness_surfaces`); the new
+    harness then governs this generation's forums, distillation and seeding.
+
+    The hook sees the run through environment variables (generation, database
+    paths, harness path). A failing or timed-out hook is logged and the run
+    continues with the harness it had. Every generation appends one provenance
+    row (harness digest, overridden surfaces, load error, hook exit code and
+    duration) to ``khsi_harness_versions.jsonl`` next to the knowledge DB, so
+    any score can be traced to the harness that produced it.
+    """
+
+    def per_task_forum(self, ctx: GenerationContext) -> None:
+        self._run_hook(ctx)
+        super().per_task_forum(ctx)
+
+    def _run_hook(self, ctx: GenerationContext) -> None:
+        import json
+        import logging
+        import os
+        import subprocess
+        import time
+        from pathlib import Path
+
+        from .. import harness_surfaces
+
+        log = logging.getLogger(__name__)
+        cmd = os.environ.get("KSI_KHSI_HOOK_CMD", "").strip()
+        final = ctx.generation >= ctx.config.num_generations
+        row: dict[str, object] = {"generation": ctx.generation, "time": time.time()}
+        if cmd and not (final and os.environ.get("KSI_KHSI_HOOK_FINAL", "0") != "1"):
+            env = dict(os.environ)
+            env.update(
+                KSI_KHSI_GENERATION=str(ctx.generation),
+                KSI_KHSI_NUM_GENERATIONS=str(ctx.config.num_generations),
+                KSI_KHSI_KNOWLEDGE_DB=str(ctx.config.knowledge_db_path or ""),
+                KSI_KHSI_RUNTIME_DB=str(ctx.config.runtime_db_path or ""),
+                KSI_KHSI_EXPERIMENT=str(ctx.config.experiment_name),
+            )
+            timeout = float(os.environ.get("KSI_KHSI_HOOK_TIMEOUT", "3600"))
+            started = time.time()
+            try:
+                done = subprocess.run(cmd, shell=True, env=env, timeout=timeout, capture_output=True, text=True)
+                row["hook_rc"] = done.returncode
+                if done.returncode != 0:
+                    log.error("[KHSI] hook failed rc=%s: %s", done.returncode, done.stderr[-1000:])
+            except subprocess.TimeoutExpired:
+                row["hook_rc"] = "timeout"
+                log.error("[KHSI] hook timed out after %.0fs", timeout)
+            row["hook_seconds"] = round(time.time() - started, 1)
+        else:
+            row["hook_rc"] = None
+        row.update(harness_surfaces.status())
+        log.info("[KHSI] gen %d harness %s", ctx.generation, row)
+        db = ctx.config.knowledge_db_path
+        if db:
+            with (Path(db).parent / "khsi_harness_versions.jsonl").open("a") as handle:
+                handle.write(json.dumps(row, sort_keys=True) + "\n")
+
+
 # --------------------------------------------------------------------------- #
 # Strategy registry (mirrors src/ksi/tasks/registry.py and the eval/runtime
 # registries). ONE place lists selectable improvement strategies so the CLI and
@@ -360,5 +425,14 @@ register_strategy(
         aliases=("raw",),
         factory=RawAttemptsStrategy,
         description="True knowledge-off ablation: skip forums + distillation + same-task enrichment; seeding still runs.",
+    )
+)
+register_strategy(
+    StrategySpec(
+        name="khsi",
+        aliases=("knowledge_harness_hook",),
+        factory=KnowledgeHarnessHookStrategy,
+        description="Default knowledge strategy plus a between-generation hook (KSI_KHSI_HOOK_CMD) "
+        "that may revise the knowledge harness (KSI_KNOWLEDGE_HARNESS).",
     )
 )

@@ -14,6 +14,8 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from ..harness_surfaces import surface
+
 _APPROX_CHARS_PER_TOKEN = 3
 
 
@@ -53,6 +55,7 @@ def _post_priority(post: dict[str, Any], *, ordinal: int) -> tuple[int, int, int
     )
 
 
+@surface("retrieve.cross_task.relevance")
 def target_relevance(post: dict[str, Any], target_tokens: frozenset[str]) -> float:
     """Lexical relevance of a post to the target task, in [0, 1].
 

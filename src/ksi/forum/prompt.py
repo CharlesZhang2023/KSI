@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..discussion.concreteness import ANTI_META_BLOCK
+from ..harness_surfaces import surface
 from ..models import TaskTrace
 
 
@@ -141,6 +142,7 @@ def _build_task_descriptions_section(
     return "\n".join(lines).rstrip() + "\n"
 
 
+@surface("forum.per_task.prompt")
 def build_per_task_discussion_parts(
     *,
     agent_id: str,
@@ -406,6 +408,7 @@ Rules:
     )
 
 
+@surface("forum.cross_task.prompt")
 def build_cross_task_discussion_parts(
     *,
     agent_id: str,

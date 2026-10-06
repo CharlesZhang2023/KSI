@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ..distillation.per_task import truncate_at_boundary
+from ..harness_surfaces import surface
 from ..memory.parity import redact_solver_hidden_text
 from ..models import TaskSpec
 from ..tasks.registry import resolve_source
@@ -460,6 +461,7 @@ def _format_evidence_post_ids(bundle: dict[str, Any]) -> str:
     return ", ".join(out)
 
 
+@surface("seed.memory_md")
 def seed_package_to_memory_md(
     seed_package: Any,
     *,
@@ -767,6 +769,7 @@ _POLICY_ERROR_PATTERNS = (
 )
 
 
+@surface("seed.render_item")
 def _render_bundle_item(item: Any, *, max_chars: int = 300) -> list[str]:
     """Render a bundle item as one or more markdown lines.
 

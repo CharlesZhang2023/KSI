@@ -512,8 +512,14 @@ def test_raw_attempts_equivalent_to_flag_combination_at_knowledge_boundary():
 def test_strategy_registry_resolves_builtins():
     from ksi.orchestrator.strategy import get_strategy_spec, supported_strategies
 
-    assert supported_strategies() == ("knowledge", "raw_attempts")
-    assert supported_strategies(include_aliases=True) == ("knowledge", "raw_attempts", "raw")
+    assert supported_strategies() == ("knowledge", "raw_attempts", "khsi")
+    assert supported_strategies(include_aliases=True) == (
+        "knowledge",
+        "raw_attempts",
+        "khsi",
+        "raw",
+        "knowledge_harness_hook",
+    )
     assert isinstance(get_strategy_spec("knowledge").factory(), DefaultKnowledgeStrategy)
     assert isinstance(get_strategy_spec("raw_attempts").factory(), RawAttemptsStrategy)
     # Alias + case/whitespace normalization.
