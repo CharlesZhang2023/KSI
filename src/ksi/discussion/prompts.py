@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import re
 
+from ..harness_surfaces import surface
+
 
 def _sanitize_agent_output(value: str) -> str:
     """Neutralize forum-protocol keywords in agent-generated text."""
@@ -234,6 +236,7 @@ _TASK_REFLECTION_AND_LESSONS_SYSTEM = (
 )
 
 
+@surface("extract.reflection.prompt")
 def build_task_reflection_and_lessons_prompt(
     *,
     agent_id: str,

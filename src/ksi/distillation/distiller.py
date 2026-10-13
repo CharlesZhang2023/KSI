@@ -11,6 +11,7 @@ from ksi.memory.knowledge_store import CROSS_TASK_SENTINEL
 from ksi.memory.parity import redact_solver_hidden_eval_fields
 
 from ..errors import AuthenticationFailure
+from ..harness_surfaces import surface
 from ._removed_env import assert_no_removed_channel_env
 from .cross_task import distill_cross_task, select_shared_cross_posts_for_targets
 from .per_task import distill_one_task, truncate_at_boundary
@@ -137,7 +138,11 @@ def distill(
     # history. No per-task posts (Phase 3 is structurally independent of
     # Phase 2). No prior bundle (consumed at seed time, doesn't feed back).
     # There is no enable_cross_task gate — the channel is unconditional.
-    cross_task_history = _load_cross_task_posts_all_gens(inp)
+    cross_task_history = select_cross_task_inputs(
+        _load_cross_task_posts_all_gens(inp),
+        generation=int(inp.generation),
+        knowledge_store=inp.knowledge_store,
+    )
     cross_post_count = len(cross_task_history)
     cross_llm = inp.llm_cross_task or inp.llm
 
@@ -334,6 +339,15 @@ def _one_task(
     if not attempts:
         return None, False
     posts = _load_per_task_posts(inp, task_id)
+    attempts, posts = select_per_task_inputs(
+        attempts,
+        posts,
+        task_id=task_id,
+        generation=int(inp.generation),
+        knowledge_store=inp.knowledge_store,
+    )
+    if not attempts:
+        return None, False
     bundle = distill_one_task(
         task_id=task_id,
         attempts=attempts,
@@ -439,6 +453,30 @@ def _latest_stored_transferables(inp: DistillInput, task_id: str) -> tuple[list[
     insights = latest["bundle"].get("transferable_insights")
     gen = latest.get("gen")
     return (insights if isinstance(insights, list) else []), (int(gen) if gen is not None else 0)
+
+
+@surface("distill.per_task.inputs")
+def select_per_task_inputs(
+    attempts: list[dict[str, Any]],
+    posts: list[dict[str, Any]],
+    *,
+    task_id: str,
+    generation: int,
+    knowledge_store: Any,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """The attempts and per-task posts one task's distillation reads (default: as loaded)."""
+    return attempts, posts
+
+
+@surface("distill.cross_task.inputs")
+def select_cross_task_inputs(
+    posts: list[dict[str, Any]],
+    *,
+    generation: int,
+    knowledge_store: Any,
+) -> list[dict[str, Any]]:
+    """The cross-task posts cross-task distillation reads (default: as loaded)."""
+    return posts
 
 
 def _load_attempts(inp: DistillInput, task_id: str, *, current_gen_only: bool = False) -> list[dict[str, Any]]:
@@ -563,6 +601,7 @@ def _load_per_task_posts(
     return posts
 
 
+@surface("distill.cross_task.window")
 def _cross_task_distill_gen_window() -> int:
     """Resolve the sliding-window size for cross-task distill input.
 
@@ -578,6 +617,7 @@ def _cross_task_distill_gen_window() -> int:
         return _CROSS_TASK_DISTILL_GEN_WINDOW_DEFAULT
 
 
+@surface("distill.per_task.window")
 def _per_task_distill_gen_window() -> int:
     """Resolve the sliding-window size for per-task distill attempt input.
 

@@ -44,19 +44,102 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 # Every replaceable surface, with what it controls. Kept here (not only in the
 # decorators) so a harness can be validated before all modules are imported.
+# Each entry states where the surface lives, what it decides, the override's
+# call shape ``fn(default, ...) -> return`` and whether an offline replay of a
+# finished run can measure it: [offline] surfaces run in distillation or
+# seeding; [online] ones run during attempts or forums, which a replay keeps
+# frozen, so only a live campaign shows their effect.
 KNOWN_SURFACES: dict[str, str] = {
-    "forum.per_task.prompt": "ksi.forum.prompt.build_per_task_discussion_parts: per-task forum prompt",
-    "forum.cross_task.prompt": "ksi.forum.prompt.build_cross_task_discussion_parts: cross-task forum prompt",
-    "distill.per_task.prompt": "ksi.distillation.prompts.build_per_task_distill_prompt: per-task distillation prompt",
+    # --- extraction: what is kept from an attempt ---
+    "extract.reflection.inputs": (
+        "ksi.orchestrator.execution_phase.reflection_inputs: what the post-attempt reflection sees "
+        "of the task statement and the model output (default: first 300 chars of the statement, "
+        "first + last 1200 chars of outputs over 2500). "
+        "fn(default, task_prompt: str, model_output: str) -> (preview: str, excerpt: str). [online]"
+    ),
+    "extract.reflection.prompt": (
+        "ksi.discussion.prompts.build_task_reflection_and_lessons_prompt: the reflection + lessons "
+        "prompt. fn(default, **kwargs) -> (system: str, user: str). [online]"
+    ),
+    # --- forums ---
+    "forum.per_task.prompt": (
+        "ksi.forum.prompt.build_per_task_discussion_parts: per-task forum prompt. "
+        "fn(default, **kwargs) -> ForumPromptParts. [online]"
+    ),
+    "forum.cross_task.prompt": (
+        "ksi.forum.prompt.build_cross_task_discussion_parts: cross-task forum prompt. "
+        "fn(default, **kwargs) -> ForumPromptParts. [online]"
+    ),
+    # --- distillation: inputs, prompts, parsing, filtering ---
+    "distill.per_task.window": (
+        "ksi.distillation.distiller._per_task_distill_gen_window: how many recent generations of "
+        "attempts per-task distillation reads (default 6; 0 = all). fn(default) -> int. [offline]"
+    ),
+    "distill.cross_task.window": (
+        "ksi.distillation.distiller._cross_task_distill_gen_window: how many recent generations of "
+        "cross-task posts cross-task distillation reads (default 6; 0 = all). "
+        "fn(default) -> int. [offline]"
+    ),
+    "distill.per_task.inputs": (
+        "ksi.distillation.distiller.select_per_task_inputs: the attempts and per-task posts one "
+        "task's distillation reads; the store gives access to earlier bundles "
+        "(knowledge_store.load_distillation(generation=g-1, task_id=..., scope='per_task')). "
+        "fn(default, attempts: list[dict], posts: list[dict], *, task_id, generation, "
+        "knowledge_store) -> (attempts, posts); no attempts = no bundle. [offline]"
+    ),
+    "distill.cross_task.inputs": (
+        "ksi.distillation.distiller.select_cross_task_inputs: the cross-task posts cross-task "
+        "distillation reads. fn(default, posts: list[dict], *, generation, knowledge_store) "
+        "-> list[dict]. [offline]"
+    ),
+    "distill.cross_task.select": (
+        "ksi.distillation.cross_task._select_cross_posts_for_budget: which cross-task posts fit "
+        "the prompt budget and in what order (default: per-generation backbone, then relevance). "
+        "fn(default, *, cross_posts, task_source, max_input_tokens, per_task_transferables=None, "
+        "target_task=None) -> list[dict]. [offline]"
+    ),
+    "distill.per_task.prompt": (
+        "ksi.distillation.prompts.build_per_task_distill_prompt: per-task distillation prompt. "
+        "fn(default, *, task_id, attempts, posts, task_source=None, win_mode=False) "
+        "-> (system: str, user: str). [offline]"
+    ),
     "distill.cross_task.prompt": (
-        "ksi.distillation.prompts.build_cross_task_distill_prompt_parts: cross-task distillation prompt"
+        "ksi.distillation.prompts.build_cross_task_distill_prompt_parts: cross-task distillation "
+        "prompt; cache_prefix + suffix is the user message. fn(default, *, cross_posts, "
+        "task_source=None, per_task_transferables=None, target_task=None) "
+        "-> (system: str, cache_prefix: str, suffix: str). [offline]"
     ),
-    "distill.bundle_filter": "ksi.distillation.per_task.dedupe_bundle_items: which distilled items are kept",
+    "distill.parse_items": (
+        "ksi.distillation.per_task._as_insight_list: turns one field of the model's bundle into "
+        "items (default: drops non-concrete text, keeps at most 5, clips text to 480 chars, keeps "
+        "an item whose evidence ids are all invalid but drops that evidence). "
+        "fn(default, value, *, allowed_post_ids: set[int] | None = None) -> list. [offline]"
+    ),
+    "distill.bundle_filter": (
+        "ksi.distillation.per_task.dedupe_bundle_items: which items of a parsed bundle are kept "
+        "(default: drop near-duplicates across fields). fn(default, bundle: dict) -> dict. [offline]"
+    ),
     "retrieve.cross_task.relevance": (
-        "ksi.memory.cross_task_context.target_relevance: ranking of cross-task posts for a target task"
+        "ksi.memory.cross_task_context.target_relevance: relevance of one cross-task post to a "
+        "target task. fn(default, post: dict, target_tokens: frozenset[str]) -> float. [offline]"
     ),
-    "seed.memory_md": "ksi.runtime.seeding.seed_package_to_memory_md: the MEMORY.md an agent receives",
-    "seed.render_item": "ksi.runtime.seeding._render_bundle_item: how one knowledge item is rendered",
+    # --- seeding: what the solver receives ---
+    "seed.select_context": (
+        "ksi.orchestrator.enrichment_phase.select_seed_context: the task's own prior attempts "
+        "(default: latest 8) and related-task summaries (default: lexical statement similarity) "
+        "put into its seed; not called for hold-out tasks. fn(default, prior_attempts: list[dict], "
+        "related_summaries: list[dict], *, task_id, task_prompt, all_summaries) "
+        "-> (prior_attempts, related_summaries). [offline]"
+    ),
+    "seed.memory_md": (
+        "ksi.runtime.seeding.seed_package_to_memory_md: the MEMORY.md an agent receives. "
+        "fn(default, seed_package: dict, *, current_task_id='', task_source='', raw_mode=False) "
+        "-> str. [offline]"
+    ),
+    "seed.render_item": (
+        "ksi.runtime.seeding._render_bundle_item: how one knowledge item is rendered. "
+        "fn(default, item, *, max_chars=300) -> list[str] (lines). [offline]"
+    ),
 }
 
 DEFAULTS: dict[str, Callable[..., Any]] = {}

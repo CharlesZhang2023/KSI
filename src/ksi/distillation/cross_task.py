@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 from ..errors import AuthenticationFailure, is_auth_error
+from ..harness_surfaces import surface
 from ..memory.cross_task_context import (  # noqa: F401  re-export for back-compat
     _backbone_indices,
     _norm_tokens,
@@ -73,6 +74,7 @@ def _estimate_prompt_tokens(
     return _approx_token_count(system_prompt) + _approx_token_count(user_prompt)
 
 
+@surface("distill.cross_task.select")
 def _select_cross_posts_for_budget(
     *,
     cross_posts: list[dict[str, Any]],

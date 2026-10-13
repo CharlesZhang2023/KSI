@@ -10,6 +10,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Protocol, runtime_checkable
 
+from ..harness_surfaces import surface
 from ..memory.parity import redact_solver_hidden_eval_fields, redact_solver_hidden_text
 from ..models import TaskSpec
 from ..tasks.registry import resolve_source
@@ -25,6 +26,23 @@ class ArcAnswerSanitizationError(RuntimeError):
     on disk. The runtime DB is bind-mounted read-only *whole*
     into the solver container, so a single unsanitized row would leak the answer;
     we fail closed (abort the run) rather than mount the leaking DB."""
+
+
+@surface("seed.select_context")
+def select_seed_context(
+    prior_attempts: list[dict],
+    related_summaries: list[dict],
+    *,
+    task_id: str,
+    task_prompt: str,
+    all_summaries: list[dict],
+) -> tuple[list[dict], list[dict]]:
+    """The task's own prior attempts and related-task summaries put into its seed.
+
+    Default: as selected upstream (latest 8 attempts from the knowledge store,
+    summaries ranked by statement similarity). Never called for hold-out tasks.
+    """
+    return prior_attempts, related_summaries
 
 
 @dataclass(frozen=True)
@@ -604,6 +622,13 @@ class EngineEnrichmentPhaseService:
         related_summaries: list[dict] = []
         if not holdout_agent:
             related_summaries = self._rank_related_summaries(task, task_id, ctx)
+            prior_attempts, related_summaries = select_seed_context(
+                prior_attempts,
+                related_summaries,
+                task_id=task_id,
+                task_prompt=task.prompt or "",
+                all_summaries=ctx.all_summaries,
+            )
 
         # --- Best score ---
         best_score = collab.best_scores.get(task_id)

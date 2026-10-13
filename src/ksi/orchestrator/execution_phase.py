@@ -19,6 +19,7 @@ from ..discussion.prompts import (
 )
 from ..errors import AuthenticationFailure, ContainerRegistryError, find_container_registry_error
 from ..errors import is_auth_error as _is_auth_error
+from ..harness_surfaces import surface
 from ..models import AgentState, EvalResult, Insight, TaskSpec, TaskTrace
 from ..runtime import RuntimeResult
 from ..runtime.normalize import SilentAgentRuntimeError, build_error_runtime_meta
@@ -41,6 +42,22 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from .engine import GenerationalOrchestrator
 
 log = logging.getLogger(__name__)
+
+
+@surface("extract.reflection.inputs")
+def reflection_inputs(task_prompt: str, model_output: str) -> tuple[str, str]:
+    """What the post-attempt reflection sees: a statement preview and an output excerpt.
+
+    First 1200 chars (approach/reasoning) + last 1200 chars (result/grid)
+    captures both strategy and outcome for insight AND lesson generation.
+    """
+    task_prompt_preview = (task_prompt or "")[:300].replace("\n", " ")
+    raw = model_output or ""
+    if len(raw) > 2500:
+        model_output_excerpt = (raw[:1200] + "\n...(truncated)...\n" + raw[-1200:]).replace("\n", " ")
+    else:
+        model_output_excerpt = raw.replace("\n", " ")
+    return task_prompt_preview, model_output_excerpt
 
 
 @dataclass(frozen=True)
@@ -1132,14 +1149,9 @@ class EngineExecutionPhaseService:
         )
         outcome = "resolved" if eval_result.get("resolved") or trace.native_score == 1.0 else "unresolved"
         score_text = "n/a" if trace.native_score is None else f"{trace.native_score:.2f}"
-        task_prompt_preview = ((task.prompt if task else "") or "")[:300].replace("\n", " ")
-        # First 1200 chars (approach/reasoning) + last 1200 chars (result/grid)
-        # captures both strategy and outcome for insight AND lesson generation.
-        _raw = trace.model_output or ""
-        if len(_raw) > 2500:
-            model_output_excerpt = (_raw[:1200] + "\n...(truncated)...\n" + _raw[-1200:]).replace("\n", " ")
-        else:
-            model_output_excerpt = _raw.replace("\n", " ")
+        task_prompt_preview, model_output_excerpt = reflection_inputs(
+            (task.prompt if task else "") or "", trace.model_output or ""
+        )
         system, prompt = build_task_reflection_and_lessons_prompt(
             agent_id=agent.id,
             agent_workstream=agent.workstream,

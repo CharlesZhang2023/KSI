@@ -498,6 +498,7 @@ def dedupe_bundle_items(bundle: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+@surface("distill.parse_items")
 def _as_insight_list(value: Any, *, allowed_post_ids: set[int] | None = None) -> list[Any]:
     """Coerce an LLM-emitted list into structured Insights or legacy strings.
 
