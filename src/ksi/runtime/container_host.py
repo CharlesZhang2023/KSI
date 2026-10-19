@@ -20,6 +20,7 @@ from ..errors import AuthenticationFailure
 from ..models import TaskSpec
 from ..prompts import build_execution_prompt, build_task_markdown
 from ..tasks.registry import resolve_source
+from . import key_rotation
 
 # Optional ARC no-MCP prompt builders. Some test harnesses stub
 # ``..prompts`` with only ``build_execution_prompt`` / ``build_task_markdown``;
@@ -378,7 +379,8 @@ def _validate_provider_auth(env: dict[str, str]) -> None:
 
 
 def _build_runner_env(base_env: dict[str, str], timeout_sec: int) -> dict[str, str]:
-    env = dict(base_env)
+    # Opt-in key rotation: each container starts with the currently active key.
+    env = key_rotation.apply_to_env(dict(base_env))
     # Egress isolation is managed by the TypeScript host runner, but the Python
     # orchestrator owns the campaign fanout. Stamp a parent-process-scoped run id
     # so all per-task runner subprocesses share one egress proxy/network lease by

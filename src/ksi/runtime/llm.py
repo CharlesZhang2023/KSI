@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 
 import anthropic
 
+from . import key_rotation
+
 try:
     from openai import OpenAI
 except ImportError:
@@ -111,7 +113,16 @@ class AnthropicLLMCaller:
         # token from the environment (Messages API requires an API key).
         api_key = (api_key or os.environ.get("ANTHROPIC_API_KEY") or "").strip() or None
         kwargs = _build_client_kwargs({}, timeout_env="KSI_ANTHROPIC_TIMEOUT_SEC", timeout_default=120)
+        self._client_kwargs = kwargs
+        self._client_key = api_key
         self._client = anthropic.Anthropic(api_key=api_key, **kwargs) if api_key else anthropic.Anthropic(**kwargs)
+
+    def _refresh_key(self) -> None:
+        """Rebuild the client when key rotation selected a different key."""
+        key = key_rotation.active_key()
+        if key and key != self._client_key:
+            self._client = anthropic.Anthropic(api_key=key, **self._client_kwargs)
+            self._client_key = key
 
     # Anthropic Messages API supports JSON-schema-constrained output via
     # tool-forcing on every SDK version this repo has shipped: define a single
@@ -133,6 +144,7 @@ class AnthropicLLMCaller:
         cache_blocks: list[str] | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
+        self._refresh_key()
         # Per-call model override (e.g. distillation phase) falls back to the
         # caller's default model when not set.
         model_override = kwargs.get("model") or self._model
@@ -254,7 +266,16 @@ class OpenAILLMCaller:
         self._seed = seed
         api_key = (api_key or os.environ.get("OPENAI_API_KEY") or "").strip()
         kwargs = _build_client_kwargs({}, timeout_env="KSI_OPENAI_TIMEOUT_SEC", timeout_default=120)
+        self._client_kwargs = kwargs
+        self._client_key = api_key
         self._client = OpenAI(api_key=api_key, **kwargs) if api_key else OpenAI(**kwargs)
+
+    def _refresh_key(self) -> None:
+        """Rebuild the client when key rotation selected a different key."""
+        key = key_rotation.active_key()
+        if key and key != self._client_key:
+            self._client = OpenAI(api_key=key, **self._client_kwargs)
+            self._client_key = key
 
     # OpenAI's Responses API supports JSON-schema-constrained output via
     # ``text={"format": {"type": "json_schema", ...}}``. The installed SDK is
@@ -273,6 +294,7 @@ class OpenAILLMCaller:
         cache_blocks: list[str] | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
+        self._refresh_key()
         # Per-call model override (e.g. distillation phase) falls back to the
         # caller's default model when not set.
         model_override = kwargs.get("model") or self._model

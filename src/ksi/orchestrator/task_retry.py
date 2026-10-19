@@ -33,6 +33,7 @@ from ..errors import (
     transient_markers,
     upstream_provider_transient_markers,
 )
+from ..runtime import key_rotation
 from ..runtime.normalize import SilentAgentRuntimeError, extract_token_usage
 from ..tokens import TokenUsage
 
@@ -108,6 +109,11 @@ def _is_retryable_task_error(exc: Exception) -> bool:
     The retry gate accepts ``session_recovery`` / ``recovered_from_session``
     and the ``per_turn_sum`` case (proven transient), but not ``unavailable``.
     """
+    # Opt-in key rotation: a quota-exhausted key is not a property of the task;
+    # the watchdog moves to the backup key and a retry starts with it.
+    if key_rotation.enabled() and any(key_rotation.is_quota_error(str(item)) for item in exception_chain(exc)):
+        return True
+
     # Registry provenance and retry policy are separate. The nearest typed
     # registry error wins even when an adapter wrapped it in a generic exception.
     registry_error = find_container_registry_error(exc)
