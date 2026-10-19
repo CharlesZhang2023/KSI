@@ -1166,6 +1166,7 @@ class KnowledgeStore:
         external_id: str | None = None,
         repo: str = "",
         supersede: bool = False,
+        trace_digest: str = "",
     ) -> int:
         """Record a task execution attempt. Returns the knowledge entry id.
 
@@ -1208,6 +1209,10 @@ class KnowledgeStore:
                 "insights": insights or [],
                 "attempt_meta": attempt_meta or {},
                 "reflection": reflection or "",
+                # Only when a harness keeps something from the tool trace
+                # (surface extract.attempt.digest): the default content stays
+                # byte-identical.
+                **({"trace_digest": trace_digest[:6000]} if trace_digest else {}),
             }
         )
 
@@ -2349,6 +2354,7 @@ class KnowledgeStore:
         if entry_type == "attempt":
             result["attempts"].append(
                 {
+                    "id": row["id"],
                     "gen": row["generation"],
                     "agent_id": row["agent_id"],
                     "score": row["native_score"],

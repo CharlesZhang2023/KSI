@@ -9,7 +9,7 @@ from typing import Any
 
 from ..errors import AuthenticationFailure, is_auth_error
 from ..harness_surfaces import surface
-from .prompts import DISTILL_BUNDLE_JSON_SCHEMA, build_per_task_distill_prompt
+from .prompts import DISTILL_BUNDLE_JSON_SCHEMA, build_per_task_distill_prompt, cite_attempts
 from .types import CROSS_TASK_INSIGHT_FIELDS, DistillLLMResult, LLMCallable, PerTaskBundle, truncate_at_boundary
 from .types import coerce_positive_int as _coerce_positive_int
 
@@ -304,6 +304,10 @@ def distill_one_task(
         return None
 
     valid_post_ids = _post_id_set(posts)
+    if cite_attempts():
+        # surface distill.evidence: attempts were listed with their knowledge
+        # ids and may be cited like posts.
+        valid_post_ids |= _post_id_set([{"id": a.get("id")} for a in attempts if isinstance(a, dict)])
 
     fields = dedupe_bundle_items(
         {field: _as_insight_list(payload.get(field), allowed_post_ids=valid_post_ids) for field in _BUNDLE_ITEM_FIELDS}

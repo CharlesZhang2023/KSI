@@ -32,7 +32,7 @@ from .attempt_events import (  # post-attempt knowledge helpers; import wires th
 from .claim_phase import EngineClaimPhaseService
 from .distillation_phase import EngineDistillationPhaseService
 from .enrichment_phase import EngineEnrichmentPhaseService
-from .execution_phase import EngineExecutionPhaseService, ExecutionPhaseInput
+from .execution_phase import EngineExecutionPhaseService, ExecutionPhaseInput, trace_digest_for
 from .forum_phase import EngineForumPhaseService, ForumValidationError  # noqa: F401
 
 # Forum machinery moved to ``forum_runtime`` and the shared retry/token helpers
@@ -1955,6 +1955,7 @@ class GenerationalOrchestrator:
                     attempt_meta=attempt_meta_for_knowledge,
                     reflection=reflection_text,
                     repo=trace.repo,
+                    trace_digest="" if self._is_holdout(trace.task_id) else trace_digest_for(trace),
                     external_id=_knowledge_attempt_external_id(
                         task_id=trace.task_id,
                         agent_id=trace.agent_id,

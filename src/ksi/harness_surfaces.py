@@ -57,6 +57,17 @@ KNOWN_SURFACES: dict[str, str] = {
         "first + last 1200 chars of outputs over 2500). "
         "fn(default, task_prompt: str, model_output: str) -> (preview: str, excerpt: str). [online]"
     ),
+    "extract.attempt.digest": (
+        "ksi.orchestrator.execution_phase.attempt_trace_digest: what is kept from an attempt's tool "
+        "trace (default: nothing; the knowledge store keeps only the final message). The returned "
+        "text is stored with the attempt (content.trace_digest, at most 6000 chars), shown to "
+        "per-task distillation and carried in seed records (prior_attempts[].trace_digest). Not "
+        "called for hold-out tasks. fn(default, attempt: dict) -> str, where attempt has task_id, "
+        "task_source, generation, agent_id, native_score, model_output and tool_trace (the list of "
+        "tool calls the solver made, with their outputs). Runs after each attempt; an offline "
+        "replay recomputes it from the source run's runtime DB "
+        "(ksi_replay_knowledge.py --backfill-digests). [offline]"
+    ),
     "extract.reflection.prompt": (
         "ksi.discussion.prompts.build_task_reflection_and_lessons_prompt: the reflection + lessons "
         "prompt. fn(default, **kwargs) -> (system: str, user: str). [online]"
@@ -97,6 +108,14 @@ KNOWN_SURFACES: dict[str, str] = {
         "the prompt budget and in what order (default: per-generation backbone, then relevance). "
         "fn(default, *, cross_posts, task_source, max_input_tokens, per_task_transferables=None, "
         "target_task=None) -> list[dict]. [offline]"
+    ),
+    "distill.evidence": (
+        "ksi.distillation.prompts.evidence_policy: what per-task distillation may cite as "
+        "evidence (default {'cite_attempts': False}: only forum posts, every Insight must quote one "
+        "verbatim, so anything absent from the forum cannot enter a bundle). With cite_attempts "
+        "the attempts are listed with their knowledge ids, an Insight may quote an attempt's "
+        "trace_digest, reflection or output instead, and those ids are valid evidence. "
+        "fn(default) -> dict. [offline]"
     ),
     "distill.per_task.prompt": (
         "ksi.distillation.prompts.build_per_task_distill_prompt: per-task distillation prompt. "

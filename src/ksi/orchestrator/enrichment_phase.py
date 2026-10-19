@@ -106,6 +106,7 @@ def _knowledge_attempts_to_seed_records(page: dict[str, Any] | None) -> list[dic
                 "task_specific_insights": task_specific_insights,
                 "attempt_history": [],
                 "updated_at": "",
+                **({"trace_digest": str(content["trace_digest"])} if content.get("trace_digest") else {}),
             }
         )
         records_by_key[(attempt.get("gen"), str(attempt.get("agent_id") or ""))] = records[-1]

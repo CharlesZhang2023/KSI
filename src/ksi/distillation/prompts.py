@@ -397,7 +397,44 @@ def _fmt_eval_results(value: Any) -> str:
     return _sanitize_prompt_excerpt("; ".join(parts), max_chars=_EVAL_SUMMARY_CHARS)
 
 
-def _fmt_attempts(attempts: list[dict[str, Any]]) -> str:
+@surface("distill.evidence")
+def evidence_policy() -> dict[str, Any]:
+    """What per-task distillation may cite (default: forum posts only)."""
+    return {"cite_attempts": False}
+
+
+def cite_attempts() -> bool:
+    policy = evidence_policy()
+    return bool(policy.get("cite_attempts")) if isinstance(policy, dict) else False
+
+
+_ATTEMPT_DIGEST_CHARS = 6000
+_CITE_POSTS_RULE = "- Each Insight's `evidence[]` MUST cite at least one post_id from the posts above (or no Insight)."
+_CITE_POSTS_OR_ATTEMPTS_RULE = (
+    "- Each Insight's `evidence[]` MUST cite at least one post_id from the posts above or one "
+    "attempt_id from the attempts above (or no Insight). An attempt's trace_digest (its rule "
+    "code and the output of its checks) is direct evidence of what was tried and what it printed."
+)
+
+_VERBATIM_FORUM_RULE = (
+    "- VERBATIM QUOTE REQUIRED: each `evidence[].quote` MUST be a verbatim "
+    "1-sentence excerpt copied from a cited forum post. Paraphrases are "
+    "rejected — if you cannot find a literal sentence in the input that "
+    "supports the Insight, the Insight is unsupported and DROPPED. The "
+    "quote field is what proves the Insight is grounded, not invented.\n"
+)
+_VERBATIM_ATTEMPT_RULE = (
+    "- VERBATIM QUOTE REQUIRED: each `evidence[].quote` MUST be a verbatim "
+    "excerpt (one sentence, or one line of code or tool output) copied from "
+    "a cited forum post or from a cited attempt's trace_digest, reflection or "
+    "output. Cite a forum post by its post id and an attempt by its "
+    "attempt_id, both in `evidence[].post_id`. Paraphrases are rejected — if "
+    "you cannot find a literal excerpt in the input that supports the "
+    "Insight, the Insight is unsupported and DROPPED.\n"
+)
+
+
+def _fmt_attempts(attempts: list[dict[str, Any]], *, with_ids: bool = False) -> str:
     if not attempts:
         return "(no attempts)"
     out = []
@@ -423,13 +460,22 @@ def _fmt_attempts(attempts: list[dict[str, Any]]) -> str:
             redact_solver_hidden_text(a.get("reflection") or ""),
             max_chars=_ATTEMPT_OUTPUT_EXCERPT_CHARS,
         )
-        parts = [f"- agent={aid}{gen_str} score={score}"]
+        id_str = f"attempt_id={a.get('id')} " if with_ids and a.get("id") is not None else ""
+        parts = [f"- {id_str}agent={aid}{gen_str} score={score}"]
         if eval_summary:
             parts.append(f"  eval={eval_summary}")
         if reflection:
             parts.append(f"  reflection={reflection}")
         if trace_summary:
             parts.append(f"  trace={trace_summary}")
+        if a.get("trace_digest"):
+            # Multi-line on purpose: rule code and tool output keep their
+            # layout so a quote can be copied from them.
+            digest = redact_solver_hidden_text(str(a["trace_digest"]))[:_ATTEMPT_DIGEST_CHARS]
+            parts.append(
+                "  trace_digest (from the attempt's tool calls):\n"
+                + "\n".join("    " + line for line in digest.splitlines())
+            )
         if attempt_meta:
             meta_bits: list[str] = []
             for key in ("reward", "agent_exit_code", "verifier_exit_code", "tool_count"):
@@ -671,10 +717,15 @@ def build_per_task_distill_prompt(
         role_directive=base_role,
         task_source=task_source,
     )
+    with_ids = cite_attempts()
+    if with_ids:
+        system = system.replace(_VERBATIM_FORUM_RULE, _VERBATIM_ATTEMPT_RULE).replace(
+            _CITE_POSTS_RULE, _CITE_POSTS_OR_ATTEMPTS_RULE
+        )
     user = (
         f"Task ID: {_sanitize_prompt_field(task_id)}\n\n"
         f"## Attempts on this task (ALL generations, chronological)\n"
-        f"{_fmt_attempts(attempts)}\n\n"
+        f"{_fmt_attempts(attempts, with_ids=with_ids)}\n\n"
         f"## Per-task forum posts on this task (ALL generations, chronological)\n"
         f"{_fmt_posts(posts)}\n\n"
         f"Distill into the structured Insight schema in the system prompt. "

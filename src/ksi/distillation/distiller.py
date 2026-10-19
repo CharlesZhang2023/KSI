@@ -535,6 +535,7 @@ def _load_attempts(inp: DistillInput, task_id: str, *, current_gen_only: bool = 
         eval_results = dict(content.get("eval_results") or {})
         out.append(
             {
+                "id": a.get("id"),
                 "agent_id": a.get("agent_id"),
                 "generation": gen,
                 "native_score": a.get("score"),
@@ -544,6 +545,7 @@ def _load_attempts(inp: DistillInput, task_id: str, *, current_gen_only: bool = 
                 "attempt_meta": content.get("attempt_meta") or {},
                 "reflection": content.get("reflection", ""),
                 "insights": content.get("insights") or [],
+                **({"trace_digest": content["trace_digest"]} if content.get("trace_digest") else {}),
             }
         )
     if dropped_pre_window:

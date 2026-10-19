@@ -60,6 +60,31 @@ def reflection_inputs(task_prompt: str, model_output: str) -> tuple[str, str]:
     return task_prompt_preview, model_output_excerpt
 
 
+@surface("extract.attempt.digest")
+def attempt_trace_digest(attempt: dict[str, Any]) -> str:
+    """What is kept from an attempt's tool trace (default: nothing)."""
+    return ""
+
+
+def trace_digest_for(trace: TaskTrace) -> str:
+    """Run ``extract.attempt.digest`` on a finished attempt; "" on error or no trace."""
+    if trace.error is not None or not trace.tool_trace:
+        return ""
+    runtime_meta = trace.runtime_meta if isinstance(trace.runtime_meta, dict) else {}
+    digest = attempt_trace_digest(
+        {
+            "task_id": trace.task_id,
+            "task_source": str(runtime_meta.get("task_source") or "").strip().lower(),
+            "generation": trace.generation,
+            "agent_id": trace.agent_id,
+            "native_score": trace.native_score,
+            "model_output": trace.model_output or "",
+            "tool_trace": list(trace.tool_trace),
+        }
+    )
+    return digest if isinstance(digest, str) else ""
+
+
 @dataclass(frozen=True)
 class ExecutionPhaseInput:
     """Inputs required to execute and evaluate task attempts for one generation."""
@@ -1099,6 +1124,7 @@ class EngineExecutionPhaseService:
             ),
             reflection=reflection_text,
             repo=trace.repo,
+            trace_digest="" if collab.is_holdout(trace.task_id) else trace_digest_for(trace),
             # Stable id shared with the engine's later, richer write for the
             # same (task_id, agent_id, generation) execution attempt — lets
             # that write supersede this placeholder in place instead of
