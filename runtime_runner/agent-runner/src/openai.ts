@@ -1269,6 +1269,12 @@ export async function runOpenAIQuery(
     await new OpenAIProvider().getModel(selectedModel),
     log,
   );
+  // A forum agent is finished once forum_signal_done has run: the host takes its
+  // posts and the done marker from the ForumBus and ignores the final text. Ending
+  // the run there keeps a model that answers the tool result with empty responses
+  // (gpt-6-luna via the gateway, 2026-11-17: 56 of them after a correct
+  // knowledge -> query -> forum_post -> forum_signal_done sequence) from running
+  // into maxTurns, which the host counts as a failed agent and drops its post.
   const makeAgent = (instructions: string): Agent =>
     new Agent({
       name: 'KsiOpenAIContainerAgent',
@@ -1277,6 +1283,7 @@ export async function runOpenAIQuery(
       instructions,
       tools,
       mcpServers,
+      ...(isForumTask ? { toolUseBehavior: { stopAtToolNames: ['forum_signal_done'] } } : {}),
     } as any);
 
   try {
