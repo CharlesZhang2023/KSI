@@ -12,6 +12,7 @@ import ksi.distillation.distiller as distiller
 import ksi.distillation.per_task as per_task
 import ksi.distillation.prompts  # noqa: F401
 import ksi.forum.prompt  # noqa: F401
+import ksi.harness_state  # noqa: F401
 import ksi.memory.cross_task_context as ctc
 import ksi.orchestrator.enrichment_phase as enrichment_phase
 import ksi.orchestrator.execution_phase as execution_phase

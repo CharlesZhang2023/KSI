@@ -10,6 +10,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Protocol, runtime_checkable
 
+from .. import harness_state
 from ..harness_surfaces import surface
 from ..memory.parity import redact_solver_hidden_eval_fields, redact_solver_hidden_text
 from ..models import TaskSpec
@@ -417,6 +418,10 @@ class EngineEnrichmentPhaseService:
             return
         if collab.memory_store is None and collab.knowledge is None:
             return
+        if collab.knowledge is not None:
+            # KHSI: seeding surfaces read the harness's stored state through this
+            # store (a resumed run starts here without having computed one).
+            harness_state.bind(collab.knowledge, experiment=collab.config.experiment_name or None)
 
         # Risk 1 (H6): enrich reads task_ids[0] per agent — fail loud rather
         # than silently enrich only the first task if that invariant is broken.

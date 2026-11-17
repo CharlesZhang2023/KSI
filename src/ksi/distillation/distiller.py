@@ -10,6 +10,7 @@ from typing import Any
 from ksi.memory.knowledge_store import CROSS_TASK_SENTINEL
 from ksi.memory.parity import redact_solver_hidden_eval_fields
 
+from .. import harness_state
 from ..errors import AuthenticationFailure
 from ..harness_surfaces import surface
 from ._removed_env import assert_no_removed_channel_env
@@ -76,6 +77,14 @@ def distill(
     cross-task input = cross-task forum history across the gen-window.
     """
     assert_no_removed_channel_env()
+    # KHSI: a harness that keeps a state of its own (surface ``state.update``)
+    # updates it from this generation's outcomes before anything is distilled,
+    # so the distillation and seeding surfaces see the new state. Does nothing,
+    # and touches no store, unless the active harness overrides that surface.
+    try:
+        harness_state.refresh(inp.knowledge_store, inp.generation, list(inp.task_ids), experiment=inp.experiment)
+    except Exception as exc:  # noqa: BLE001 - the harness's state must never break distillation
+        log.error("[HARNESS] state.update failed for gen=%d: %r; previous state kept", inp.generation, exc)
     bridge = _transfer_bridge_enabled()
     per_task_results: dict[str, PerTaskBundle] = {}
     failures = 0  # silent-degradation counter surfaced via DistillOutput

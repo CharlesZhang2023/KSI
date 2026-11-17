@@ -5,6 +5,8 @@ knowledge harness may replace: how forums are prompted, how bundles are
 distilled and filtered, how cross-task posts are ranked for a target, and how
 knowledge is rendered into an agent's MEMORY.md. Each is marked with
 ``@surface(name)`` at its definition, so every call site goes through it.
+A harness may also keep a small state of its own across generations
+(``state.update``, read anywhere with :func:`get_state`).
 
 With no harness installed every surface calls its original function directly;
 the default pipeline is unchanged. A harness is a Python file that defines::
@@ -26,6 +28,7 @@ This module must stay dependency-free: it is imported by low-level modules.
 
 from __future__ import annotations
 
+import copy
 import functools
 import hashlib
 import importlib.util
@@ -159,6 +162,20 @@ KNOWN_SURFACES: dict[str, str] = {
         "ksi.runtime.seeding._render_bundle_item: how one knowledge item is rendered. "
         "fn(default, item, *, max_chars=300) -> list[str] (lines). [offline]"
     ),
+    # --- the harness's own memory across generations ---
+    "state.update": (
+        "ksi.harness_state.update_state: the harness's own persistent state (default: none kept). "
+        "Called once per generation g, before that generation's distillation, with the state "
+        "returned at g-1 ({} at first) and feedback about generation g: {'generation': g, 'tasks': "
+        "{task_id: {'score': best native score at g, 'solved': bool, 'attempts': [{'id', "
+        "'agent_id', 'score', 'trace_digest'?}], 'seeded': {'per_task': bundle | None, "
+        "'cross_task': bundle | None}}}}; 'seeded' holds the bundles stored for the task at g-1, "
+        "which is what its solver was seeded from. Hold-out tasks are never included. The returned "
+        "dict must be JSON-serialisable and at most 256 KB as JSON; it is stored in the knowledge "
+        "database, and every surface can read the latest one with "
+        "ksi.harness_surfaces.get_state(). An offline replay rebuilds it generation by generation "
+        "(ksi.harness_state.rebuild). fn(default, state: dict, feedback: dict) -> dict. [offline]"
+    ),
 }
 
 DEFAULTS: dict[str, Callable[..., Any]] = {}
@@ -171,6 +188,48 @@ _state: dict[str, Any] = {
     "error": None,
     "call_errors": {},  # surface -> count of override exceptions (default used instead)
 }
+
+
+# The harness state most recently produced by ``state.update`` (ksi.harness_state
+# keeps it current). ``None`` = not loaded in this process yet: the loader, set by
+# whoever owns the knowledge store, fetches the stored one on first use.
+_harness_state: dict[str, Any] | None = None
+_harness_state_loader: Callable[[], dict[str, Any] | None] | None = None
+
+
+def get_state() -> dict[str, Any]:
+    """A copy of the harness's persistent state ({} when the harness keeps none)."""
+    global _harness_state
+    if _harness_state is None and _harness_state_loader is not None:
+        try:
+            loaded = _harness_state_loader()
+        except Exception as exc:  # noqa: BLE001 - a missing state must not break a surface
+            log.error("[HARNESS] loading the harness state failed: %s", exc)
+            loaded = None
+        with _lock:
+            if _harness_state is None:
+                _harness_state = loaded if isinstance(loaded, dict) else {}
+    return copy.deepcopy(_harness_state) if _harness_state else {}
+
+
+def set_state(state: dict[str, Any] | None) -> None:
+    """Set the in-process harness state (None = load it again on next use)."""
+    global _harness_state
+    with _lock:
+        _harness_state = None if state is None else copy.deepcopy(state)
+
+
+def set_state_loader(loader: Callable[[], dict[str, Any] | None] | None) -> None:
+    """Register how to fetch the stored state in a process that has not computed one."""
+    global _harness_state_loader, _harness_state
+    with _lock:
+        _harness_state_loader = loader
+        _harness_state = None
+
+
+def overridden(name: str) -> bool:
+    """Whether the active harness replaces surface ``name``."""
+    return name in _overrides()
 
 
 def surface(name: str) -> Callable[[F], F]:
@@ -221,8 +280,10 @@ def _record_call_error(name: str, exc: Exception) -> None:
 
 def install(path: str | os.PathLike[str] | None) -> dict[str, Any]:
     """Use the harness at ``path`` (None restores the env var / defaults)."""
+    global _harness_state
     with _lock:
         _state.update(path=None if path is None else str(path), digest=None, overrides={}, error=None, call_errors={})
+        _harness_state = None  # another harness: its stored state, if any, is loaded on next use
     _overrides()
     return status()
 

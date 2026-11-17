@@ -1777,6 +1777,90 @@ class KnowledgeStore:
         except (TypeError, ValueError):
             return 0
 
+    # ------------------------------------------------------------------
+    # Knowledge-harness state (KHSI): one JSON object per generation that a
+    # harness's ``state.update`` surface returned. The table is created on the
+    # first write, so a run without such a harness keeps the upstream schema.
+    # ------------------------------------------------------------------
+
+    _HARNESS_STATE_DDL = """
+        CREATE TABLE IF NOT EXISTS harness_state (
+            run_id          INTEGER NOT NULL REFERENCES runs(id),
+            generation      INTEGER NOT NULL,
+            state_json      TEXT NOT NULL,
+            harness_digest  TEXT,
+            created_at      TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (run_id, generation)
+        )
+    """
+
+    def record_harness_state(
+        self,
+        *,
+        generation: int,
+        state: dict,
+        harness_digest: str | None = None,
+        experiment: str | None = None,
+    ) -> None:
+        """Store the harness state reached after ``generation`` (replaces an earlier one)."""
+
+        def _op() -> None:
+            with self._locked(), self._batched():
+                run_id = self._ensure_run_locked(experiment)
+                self._conn.execute(self._HARNESS_STATE_DDL)
+                self._conn.execute(
+                    """
+                    INSERT OR REPLACE INTO harness_state(run_id, generation, state_json, harness_digest)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (run_id, int(generation), _json_dumps(state), harness_digest),
+                )
+
+        self._run_write(_op)
+
+    def load_harness_state(
+        self,
+        *,
+        max_generation: int | None = None,
+        experiment: str | None = None,
+    ) -> tuple[int, dict] | None:
+        """Latest stored harness state at or before ``max_generation`` as (generation, state)."""
+        run_id = self._find_run(experiment)
+        if run_id is None:
+            return None
+        sql = "SELECT generation, state_json FROM harness_state WHERE run_id = ?"
+        params: tuple = (run_id,)
+        if max_generation is not None:
+            sql += " AND generation <= ?"
+            params += (int(max_generation),)
+        try:
+            row = self._execute(sql + " ORDER BY generation DESC LIMIT 1", params, fetchone=True)
+        except sqlite3.OperationalError:
+            return None  # no harness has stored a state in this database
+        if not row:
+            return None
+        state = _json_loads(row["state_json"], {})
+        return int(row["generation"]), state if isinstance(state, dict) else {}
+
+    def clear_harness_state(self, *, min_generation: int = 0, experiment: str | None = None) -> int:
+        """Delete stored harness states of generations >= ``min_generation``; returns the row count."""
+        run_id = self._find_run(experiment)
+        if run_id is None:
+            return 0
+
+        def _op() -> int:
+            with self._locked(), self._batched():
+                try:
+                    cur = self._conn.execute(
+                        "DELETE FROM harness_state WHERE run_id = ? AND generation >= ?",
+                        (run_id, int(min_generation)),
+                    )
+                except sqlite3.OperationalError:
+                    return 0
+                return int(cur.rowcount or 0)
+
+        return int(self._run_write(_op))
+
     def record_insight(
         self,
         *,
